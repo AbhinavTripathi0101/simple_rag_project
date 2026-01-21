@@ -1,57 +1,33 @@
 import streamlit as st
-from dotenv import load_dotenv
+from src.agent import run_agent
 import os
 
-from src.rag_pipeline import RAGPipeline
-
-
-load_dotenv()
-
-
-rag = RAGPipeline()
-
-
-st.set_page_config(page_title="RAG Chatbot", layout="wide")
-st.title(" RAG Chatbot with Streaming ")
-
+st.set_page_config(page_title="Stable Agentic RAG", layout="centered")
+st.title("🤖  Agentic RAG")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Sidebar cleanup
+if st.sidebar.button("Clear Chat"):
+    st.session_state.messages = []
+    if os.path.exists("memory/chat_sum.json"):
+        os.remove("memory/chat_sum.json")
+    st.rerun()
 
-with st.sidebar:
-    st.markdown("### ℹ Chatbot Info")
-    st.write(f"**Model:** {os.getenv('GROQ_MODEL')}")
-    st.write(f"**Chunks in DB:** {len(rag.retriever.collection.get()['ids'])}")
-    st.button(" Clear Chat", on_click=lambda: st.session_state.messages.clear())
+# Display Chat History
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
 
+user_input = st.chat_input("Ask about your PDF or general info...")
 
-for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).markdown(msg["content"])
-
-
-user_input = st.chat_input("Ask a question...")
 if user_input:
     st.chat_message("user").markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-
-    response_text = ""
-    response_area = st.empty()
-    response_gen, retrieved_chunks = rag.run(user_input)
-
-
-    with st.expander("Retrieved Context Chunks"):
-        for chunk in retrieved_chunks:
-            st.markdown(f"**{chunk['id']}** (score: {chunk['distance']:.4f})")
-            st.markdown(chunk["text"])
-            st.markdown("---")
-
-
-    for token in response_gen:
-        if token:
-            response_text += token
-            response_area.markdown(response_text + "▌")
-
-    response_area.markdown(response_text)
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
+    with st.chat_message("assistant"):
+        with st.spinner("Processing..."):
+            answer = run_agent(user_input)
+            st.markdown(answer)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
